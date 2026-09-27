@@ -96,6 +96,10 @@ After editing a file, reload the extension on the browser's extensions page and 
 - Each demo viewer renders independently, so a small amount of drift can occur during playback. The matching controls realign them.
 - This is a community project and is not affiliated with Tempus Network, TF2Jump, Valve, or Team Fortress 2.
 
+## Support
+
+If Tempus or demos.tf2jump.xyz changes and the extension stops working, contact me on Discord: **@jadro**.
+
 ## License
 
 [MIT](LICENSE)
