@@ -38,13 +38,15 @@ The extension should now show a **Compare runs** button on demos.tf2jump.xyz and
 
 Open a map on Tempus and select **Map Run**. Every record receives an **A** and **B** button. Pick one record for each side, then click **Open comparison**.
 
+![Tempus map leaderboard with A and B record buttons and the signed-in player's runs](assets/tempus-run-picker.png)
+
 The two demos open paused at their run starts. Use the clearly labeled **Linked replay controls** above them to control both at once.
 
 ### Quickly select your own record
 
 **You must be signed in to Tempus for Your runs to appear.** When signed in, the comparison panel displays your Soldier and Demoman map records above the A/B selection. Use **A** or **B** to add your run to the comparison, or use the play button to watch it by itself.
 
-![Tempus comparison picker showing the signed-in player's personal runs](assets/tempus-run-picker.png)
+![Close-up of the signed-in player's Soldier and Demoman records](assets/tempus-your-runs.png)
 
 The extension requests your record directly from Tempus, so it works even when your rank is not among the first 50 visible leaderboard entries. A record without an available demo is shown but cannot be selected for playback.
 
