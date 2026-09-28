@@ -7,6 +7,7 @@ A small Chrome and Edge extension for watching [Tempus](https://tempus2.xyz/) TF
 ## Features
 
 - Pick Run A and Run B directly from a Tempus map leaderboard.
+- Find your own map records immediately when you are signed in to Tempus, even when they are outside the first 50 leaderboard results.
 - Open any Tempus record in the demo viewer with one click.
 - Paste Tempus record links, demo viewer links, or plain record IDs.
 - Play, pause, seek, change playback speed, and return both demos to the run start together.
@@ -37,9 +38,15 @@ The extension should now show a **Compare runs** button on demos.tf2jump.xyz and
 
 Open a map on Tempus and select **Map Run**. Every record receives an **A** and **B** button. Pick one record for each side, then click **Open comparison**.
 
-![A and B buttons on a Tempus map leaderboard](assets/tempus-run-picker.png)
-
 The two demos open paused at their run starts. Use the clearly labeled **Linked replay controls** above them to control both at once.
+
+### Quickly select your own record
+
+**You must be signed in to Tempus for Your runs to appear.** When signed in, the comparison panel displays your Soldier and Demoman map records above the A/B selection. Use **A** or **B** to add your run to the comparison, or use the play button to watch it by itself.
+
+![Tempus comparison picker showing the signed-in player's personal runs](assets/tempus-run-picker.png)
+
+The extension requests your record directly from Tempus, so it works even when your rank is not among the first 50 visible leaderboard entries. A record without an available demo is shown but cannot be selected for playback.
 
 ### Watch one record
 
@@ -80,7 +87,7 @@ Download the ZIP again and replace the old files, then return to the extensions 
 
 ## Privacy and permissions
 
-The extension runs only on `tempus2.xyz` and `demos.tf2jump.xyz`. It has no extra browser permissions, analytics, or telemetry. Selected records and the preferred layout are stored locally in the browser.
+The extension runs only on `tempus2.xyz` and `demos.tf2jump.xyz`. It has no extra browser permissions, analytics, or telemetry. Selected records and the preferred layout are stored locally in the browser. On Tempus map pages, it reads the signed-in player ID already stored by Tempus and requests that player's map records from the public Tempus API.
 
 ## Development
 
