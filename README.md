@@ -9,7 +9,7 @@ A small Chrome and Edge extension for watching [Tempus](https://tempus2.xyz/) TF
 - Pick Run A and Run B directly from a Tempus map leaderboard.
 - Open any Tempus record in the demo viewer with one click.
 - Paste Tempus record links, demo viewer links, or plain record IDs.
-- Play, pause, seek, and return both demos to the run start together.
+- Play, pause, seek, change playback speed, and return both demos to the run start together.
 - Match one viewer to the other if their times drift apart.
 - Jump both runs to a specific time such as `12.5` or `1:12.5`.
 - Choose side by side, ultrawide, stacked, or fill layouts.
@@ -39,7 +39,7 @@ Open a map on Tempus and select **Map Run**. Every record receives an **A** and 
 
 ![A and B buttons on a Tempus map leaderboard](assets/tempus-run-picker.png)
 
-The two demos open paused at their run starts. Use the toolbar above them to control both at once.
+The two demos open paused at their run starts. Use the clearly labeled **Linked replay controls** above them to control both at once.
 
 ### Watch one record
 
@@ -63,15 +63,16 @@ Click **Load both** after entering Run A and Run B.
 
 | Control | What it does |
 | --- | --- |
-| Play / Pause | Starts or pauses both demos together |
-| Seek back / forward | Uses the demo viewer's seek control on both runs |
+| Play both / Pause both | Starts or pauses both demos together |
+| −50 ticks / +50 ticks | Seeks both demos backward or forward |
 | Run start | Returns both demos to their detected run starts |
-| Match A time | Moves Run B to Run A's current run time |
-| Match B time | Moves Run A to Run B's current run time |
-| Jump to | Moves both demos to the entered run time |
-| View | Changes how the two viewers fit on screen |
+| Speed | Sets both demos to 0.1×, 0.5×, 1×, 2×, or 3× playback |
+| Match B to A | Moves Run B to Run A's current run time |
+| Match A to B | Moves Run A to Run B's current run time |
+| Jump both | Moves both demos to the entered run time |
+| Layout | Changes how the two viewers fit on screen |
 
-If the runs become slightly misaligned, pause them and use **Match A time**, **Match B time**, or **Run start**.
+If the runs become slightly misaligned, pause them and use **Match B to A**, **Match A to B**, or **Run start**.
 
 ## Update
 

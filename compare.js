@@ -6,6 +6,7 @@
   const SITE = 'https://demos.tf2jump.xyz';
   const TICKS_PER_SECOND = 200 / 3;
   const LOAD_TIMEOUT_MS = 90000;
+  const PLAYBACK_SPEEDS = [0.1, 0.5, 1, 2, 3];
   let comparison = null;
 
   const launcher = document.createElement('button');
@@ -74,8 +75,10 @@
     const path = toolbar.children[3]?.querySelector('svg path')?.getAttribute('d') || '';
     const playing = path.startsWith('M96 448h106.7') ? true :
       path.startsWith('M96 52v408') ? false : null;
+    const speed = Number((toolbar.children[6]?.textContent || '').replace('×', ''));
     if (!Number.isFinite(tick) || elapsed === null || playing === null) return null;
-    return { doc, toolbar, tick, elapsed, playing };
+    return { doc, toolbar, tick, elapsed, playing,
+      speed: Number.isFinite(speed) ? speed : 1 };
   }
 
   function collapseViewOptions(frame) {
@@ -159,12 +162,17 @@
 
   function refreshTimes(comparison) {
     if (!comparison.ready || comparison.busy) return;
-    comparison.frames.forEach((frame, index) => {
-      const current = viewer(frame);
+    const states = comparison.frames.map(frame => viewer(frame));
+    states.forEach((current, index) => {
       setStatus(comparison, index,
         current ? `${formatSeconds(current.elapsed)} · ${current.playing ? 'Playing' : 'Paused'}` : 'Viewer unavailable',
         current ? 'ready' : 'error');
     });
+    const allPlaying = states.every(state => state?.playing);
+    const toggle = button(comparison, 'toggle-playback');
+    toggle.textContent = allPlaying ? 'Ⅱ Pause both' : '▶ Play both';
+    toggle.setAttribute('aria-pressed', String(allPlaying));
+    comparison.shadow.querySelector('.tf2c-speed').value = String(comparison.playbackSpeed);
   }
 
   function frameURL(source, tick) {
@@ -185,6 +193,7 @@
           comparison.baseTicks[index] + seconds * TICKS_PER_SECOND), `Run ${index + 1}`);
       });
       await Promise.all(requests);
+      await applyPlaybackSpeed(comparison, comparison.playbackSpeed);
       comparison.frames.forEach((frame, index) => bindFrame(comparison, frame, index));
       comparison.ready = true;
     } catch (error) {
@@ -199,7 +208,7 @@
     const message = error instanceof Error ? error.message : String(error);
     comparison.shadow.querySelector('.tf2c-error').textContent = message;
     comparison.shadow.querySelector('.tf2c-fields').hidden = false;
-    button(comparison, 'change').textContent = 'Hide links';
+    button(comparison, 'change').textContent = 'Hide runs';
     comparison.ready = false;
     comparison.frames.forEach((_, index) => setStatus(comparison, index, 'Unable to load', 'error'));
   }
@@ -235,10 +244,11 @@
         }
       });
       await Promise.all(alignments);
+      await applyPlaybackSpeed(comparison, comparison.playbackSpeed);
       comparison.frames.forEach((frame, index) => bindFrame(comparison, frame, index));
       comparison.ready = true;
       comparison.shadow.querySelector('.tf2c-fields').hidden = true;
-      button(comparison, 'change').textContent = 'Change runs';
+      button(comparison, 'change').textContent = 'Runs';
     } catch (error) {
       showError(comparison, error);
     } finally {
@@ -264,9 +274,73 @@
     refreshTimes(comparison);
   }
 
+  function togglePlayback(comparison) {
+    const allPlaying = comparison.frames.every(frame => viewer(frame)?.playing);
+    setPlayback(comparison, !allPlaying);
+  }
+
   function seek(comparison, direction) {
     if (!comparison.ready || comparison.busy) return;
     comparison.frames.forEach(frame => clickControl(frame, direction < 0 ? 2 : 4));
+    refreshTimes(comparison);
+  }
+
+  const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+
+  async function setViewerSpeed(frame, speed) {
+    let current = viewer(frame);
+    if (!current) return false;
+    if (Math.abs(current.speed - speed) < .001) return true;
+
+    current.toolbar.children[6]?.click();
+    const label = `${speed}×`;
+    let option = null;
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      option = [...current.doc.querySelectorAll('button')]
+        .find(candidate => candidate.textContent.trim() === label);
+      if (option) break;
+      await delay(25);
+    }
+    if (!option) return false;
+    option.click();
+
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      await delay(25);
+      current = viewer(frame);
+      if (current && Math.abs(current.speed - speed) < .001) {
+        current.toolbar.children[6]?.click();
+        await delay(50);
+        return true;
+      }
+    }
+    current?.toolbar.children[6]?.click();
+    return false;
+  }
+
+  async function applyPlaybackSpeed(comparison, speed) {
+    const results = await Promise.all(comparison.frames.map(frame => setViewerSpeed(frame, speed)));
+    if (results.every(Boolean)) {
+      comparison.playbackSpeed = speed;
+      comparison.shadow.querySelector('.tf2c-speed').value = String(speed);
+      return true;
+    }
+    return false;
+  }
+
+  async function changePlaybackSpeed(comparison, speed) {
+    if (!comparison.ready || comparison.busy || !PLAYBACK_SPEEDS.includes(speed)) return;
+    const previous = comparison.playbackSpeed;
+    setBusy(comparison, true);
+    const changed = await applyPlaybackSpeed(comparison, speed);
+    if (!changed) {
+      await applyPlaybackSpeed(comparison, previous);
+      comparison.shadow.querySelector('.tf2c-speed').value = String(previous);
+      comparison.shadow.querySelector('.tf2c-error').textContent =
+        'Unable to change both replay speeds. Try again after both demos finish loading.';
+    } else {
+      comparison.shadow.querySelector('.tf2c-error').textContent = '';
+    }
+    setBusy(comparison, false);
     refreshTimes(comparison);
   }
 
@@ -283,6 +357,7 @@
       await navigateFrame(comparison.frames[targetIndex],
         frameURL(comparison.sources[targetIndex], comparison.baseTicks[targetIndex] +
           Math.max(0, reference.elapsed) * TICKS_PER_SECOND), `Run ${targetIndex + 1}`);
+      await applyPlaybackSpeed(comparison, comparison.playbackSpeed);
       bindFrame(comparison, comparison.frames[targetIndex], targetIndex);
       comparison.ready = true;
     } catch (error) {
@@ -312,7 +387,7 @@
   function toggleRunFields(comparison) {
     const fields = comparison.shadow.querySelector('.tf2c-fields');
     fields.hidden = !fields.hidden;
-    button(comparison, 'change').textContent = fields.hidden ? 'Change runs' : 'Hide links';
+    button(comparison, 'change').textContent = fields.hidden ? 'Runs' : 'Hide runs';
   }
 
   function jumpTo(comparison) {
@@ -336,8 +411,7 @@
     if (event.code === 'Space') {
       event.preventDefault();
       event.stopImmediatePropagation();
-      const allPlaying = comparison.frames.every(frame => viewer(frame)?.playing);
-      setPlayback(comparison, !allPlaying);
+      togglePlayback(comparison);
     } else if (event.code === 'ArrowLeft' || event.code === 'ArrowRight') {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -355,6 +429,17 @@
       const current = viewer(frame);
       if (!current) return;
       const node = event.target && typeof event.target.closest === 'function' ? event.target : null;
+      const speedOption = node?.closest('button');
+      const speedMatch = /^(0\.1|0\.5|1|2|3)×$/.exec(speedOption?.textContent.trim() || '');
+      if (speedMatch) {
+        const speed = Number(speedMatch[1]);
+        comparison.playbackSpeed = speed;
+        comparison.shadow.querySelector('.tf2c-speed').value = String(speed);
+        setTimeout(() => {
+          void setViewerSpeed(comparison.frames[1 - index], speed).then(() => refreshTimes(comparison));
+        }, 0);
+        return;
+      }
       const control = node?.closest('.cursor-pointer');
       if (!control || control.parentElement !== current.toolbar) return;
       const controlIndex = [...current.toolbar.children].indexOf(control);
@@ -396,22 +481,37 @@
       <style>
         * { box-sizing: border-box; }
         .tf2c { width: 100%; height: 100%; display: flex; flex-direction: column; background: #081316; color: #e8f4ef; font: 14px system-ui, sans-serif; }
-        .tf2c-header { padding: 12px 16px; background: #102126; border-bottom: 1px solid #315159; }
-        .tf2c-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-        .tf2c-heading-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-        .tf2c-heading-actions label { min-width: 0; flex: none; }
-        h1 { margin: 0; font-size: 18px; }
-        .tf2c-fields, .tf2c-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+        .tf2c-header { padding: 9px 12px 10px; background: #0d2025; border-top: 2px solid #49bd9a; border-bottom: 1px solid #315159; box-shadow: 0 8px 24px #0005; }
+        .tf2c-topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .tf2c-brand { display: flex; align-items: center; gap: 9px; min-width: 0; }
+        .tf2c-brand-mark { padding: 4px 7px; border-radius: 5px; background: #49bd9a; color: #062820; font-size: 10px; font-weight: 900; letter-spacing: .1em; }
+        .tf2c-brand-copy { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+        .tf2c-brand-copy strong { font-size: 15px; white-space: nowrap; }
+        .tf2c-brand-copy span { color: #a9c5c5; font-size: 12px; white-space: nowrap; }
+        .tf2c-heading-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+        .tf2c-action-label { color: #a9c5c5; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+        .tf2c-fields { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; padding: 8px; border: 1px solid #315159; border-radius: 9px; background: #09171b; }
         .tf2c-fields[hidden], .tf2c-error:empty { display: none; }
-        label { display: flex; align-items: center; gap: 6px; min-width: min(360px, 100%); flex: 1; }
+        .tf2c-fields label { display: flex; align-items: center; gap: 6px; min-width: min(320px, 100%); flex: 1; font-weight: 700; }
         input { min-width: 0; width: 100%; padding: 8px 10px; border: 1px solid #547178; border-radius: 7px; background: #081316; color: #fff; font: inherit; }
-        .tf2c-jump { width: 100px; }
         select { padding: 7px 9px; border: 1px solid #547178; border-radius: 7px; background: #081316; color: #fff; font: inherit; }
-        button { padding: 8px 12px; border: 1px solid #547178; border-radius: 7px; background: #1a343b; color: #f0fff9; font: 600 13px system-ui, sans-serif; cursor: pointer; }
+        button { padding: 7px 10px; border: 1px solid #547178; border-radius: 7px; background: #1a343b; color: #f0fff9; font: 700 12px system-ui, sans-serif; cursor: pointer; white-space: nowrap; }
         button:hover:enabled { background: #28515a; }
         button:disabled { opacity: .42; cursor: not-allowed; }
         a { color: #82e0bb; font-weight: 600; text-decoration: underline; }
         .tf2c-primary { background: #126e5d; border-color: #49d6a8; }
+        .tf2c-control-deck { display: flex; align-items: stretch; gap: 7px; margin-top: 8px; flex-wrap: wrap; }
+        .tf2c-control-group { min-width: 0; display: flex; align-items: center; gap: 6px; padding: 6px; border: 1px solid #284951; border-radius: 10px; background: #09181c; }
+        .tf2c-control-group[data-group="playback"] { flex: 1 1 530px; }
+        .tf2c-control-group[data-group="align"] { flex: 1 1 430px; }
+        .tf2c-group-label { padding: 0 5px; color: #7ed9bf; font-size: 10px; font-weight: 900; letter-spacing: .09em; text-transform: uppercase; white-space: nowrap; }
+        .tf2c-playback { min-width: 104px; background: #49bd9a; border-color: #78e1bf; color: #062820; }
+        .tf2c-playback:hover:enabled { background: #72d9b8; }
+        .tf2c-playback[aria-pressed="true"] { background: #e5b968; border-color: #f1d59c; color: #2c2109; }
+        .tf2c-speed-wrap { display: flex; align-items: center; gap: 5px; margin-left: 2px; color: #a9c5c5; font-size: 11px; font-weight: 700; white-space: nowrap; }
+        .tf2c-speed { width: 66px; padding: 6px 7px; }
+        .tf2c-jump { width: 108px; padding: 7px 9px; }
+        .tf2c-shortcuts { align-self: center; padding: 0 4px; color: #8da9ac; font-size: 11px; white-space: nowrap; }
         .tf2c-error { margin-top: 6px; color: #ffb4a6; }
         .tf2c-panes { min-height: 0; flex: 1; display: grid; grid-template-columns: 1fr 1fr; }
         .tf2c-pane { min-width: 0; min-height: 0; display: flex; flex-direction: column; border-right: 1px solid #315159; }
@@ -425,19 +525,21 @@
         .tf2c-status[data-kind="error"] { color: #ffb4a6; }
         .tf2c-viewport { flex: 1; min-height: 0; min-width: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #050909; }
         iframe { flex: none; display: block; border: 0; background: #050909; }
-        @media (max-width: 800px) { .tf2c-panes { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; } .tf2c-pane { border-right: 0; border-bottom: 1px solid #315159; } }
+        @media (max-width: 800px) { .tf2c-brand-copy span, .tf2c-shortcuts { display: none; } .tf2c-panes { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; } .tf2c-pane { border-right: 0; border-bottom: 1px solid #315159; } }
       </style>
       <main class="tf2c" data-layout="side">
         <header class="tf2c-header">
-          <div class="tf2c-heading"><h1>Compare TF2 jump runs</h1><div class="tf2c-heading-actions">
-            <label for="tf2c-layout">View</label>
+          <div class="tf2c-topbar">
+            <div class="tf2c-brand"><span class="tf2c-brand-mark">SYNCVIEW</span><div class="tf2c-brand-copy"><strong>Linked replay controls</strong><span>Every control below affects both replays</span></div></div>
+            <div class="tf2c-heading-actions">
+            <label class="tf2c-action-label" for="tf2c-layout">Layout</label>
             <select id="tf2c-layout" class="tf2c-layout" aria-label="Viewer layout">
               <option value="wide">Side by side · 16:9</option>
               <option value="cinema">Side by side · 21:9</option>
               <option value="stacked">Stacked · full width</option>
               <option value="fill">Side by side · fill panes</option>
             </select>
-            <button data-action="change">Hide links</button>
+            <button data-action="change">Hide runs</button>
             <button data-action="close" aria-label="Close comparison">Close</button>
           </div></div>
           <div class="tf2c-fields">
@@ -446,17 +548,27 @@
             <button class="tf2c-primary" data-action="load">Load both</button>
             <a href="https://tempus2.xyz/maps" target="_blank" rel="noopener">Browse Tempus maps ↗</a>
           </div>
-          <div class="tf2c-controls">
-            <button data-control data-action="play" disabled>▶ Play</button>
-            <button data-control data-action="pause" disabled>Ⅱ Pause</button>
-            <button data-control data-action="back" disabled>⏪ Seek back</button>
-            <button data-control data-action="forward" disabled>⏩ Seek forward</button>
-            <button data-control data-action="start" disabled>↩ Run start</button>
-            <button data-control data-action="sync-a" disabled>Match A time</button>
-            <button data-control data-action="sync-b" disabled>Match B time</button>
-            <input class="tf2c-jump" aria-label="Run time to jump to" placeholder="1:12.5">
-            <button data-control data-action="jump" disabled>Jump to</button>
-            <span>Space: play/pause · ←/→: seek</span>
+          <div class="tf2c-control-deck">
+            <div class="tf2c-control-group" data-group="playback">
+              <span class="tf2c-group-label">Both replays</span>
+              <button class="tf2c-playback" data-control data-action="toggle-playback" aria-pressed="false" disabled>▶ Play both</button>
+              <button data-control data-action="back" title="Seek both replays back 50 ticks" disabled>−50 ticks</button>
+              <button data-control data-action="forward" title="Seek both replays forward 50 ticks" disabled>+50 ticks</button>
+              <button data-control data-action="start" title="Return both replays to their run starts" disabled>↶ Run start</button>
+              <label class="tf2c-speed-wrap">Speed
+                <select class="tf2c-speed" data-control aria-label="Playback speed for both replays" disabled>
+                  <option value="0.1">0.1×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="3">3×</option>
+                </select>
+              </label>
+            </div>
+            <div class="tf2c-control-group" data-group="align">
+              <span class="tf2c-group-label">Align & inspect</span>
+              <button data-control data-action="sync-a" title="Move Run B to Run A's current time" disabled>Match B to A</button>
+              <button data-control data-action="sync-b" title="Move Run A to Run B's current time" disabled>Match A to B</button>
+              <input class="tf2c-jump" aria-label="Run time to jump both replays to" placeholder="Time 1:12.5">
+              <button data-control data-action="jump" disabled>Jump both</button>
+            </div>
+            <span class="tf2c-shortcuts">Space · play/pause&nbsp;&nbsp; ← / → · seek</span>
           </div>
           <div class="tf2c-error" role="alert"></div>
         </header>
@@ -473,7 +585,7 @@
     comparison = {
       host, shadow, root, oldRootVisibility, oldBodyOverflow,
       frames: [...shadow.querySelectorAll('iframe')], sources: [], baseTicks: [],
-      ready: false, busy: false, timer: null, resizeObserver: null
+      ready: false, busy: false, playbackSpeed: 1, timer: null, resizeObserver: null
     };
     const layout = shadow.querySelector('.tf2c-layout');
     const defaultLayout = innerWidth / innerHeight >= 2.2 ? 'stacked' : 'wide';
@@ -485,8 +597,7 @@
     }
     button(comparison, 'close').addEventListener('click', closeComparison);
     button(comparison, 'load').addEventListener('click', () => void loadBoth(comparison));
-    button(comparison, 'play').addEventListener('click', () => setPlayback(comparison, true));
-    button(comparison, 'pause').addEventListener('click', () => setPlayback(comparison, false));
+    button(comparison, 'toggle-playback').addEventListener('click', () => togglePlayback(comparison));
     button(comparison, 'back').addEventListener('click', () => seek(comparison, -1));
     button(comparison, 'forward').addEventListener('click', () => seek(comparison, 1));
     button(comparison, 'start').addEventListener('click', () => void reloadAt(comparison, 0));
@@ -494,6 +605,9 @@
     button(comparison, 'sync-b').addEventListener('click', () => void syncTo(comparison, 1));
     button(comparison, 'jump').addEventListener('click', () => jumpTo(comparison));
     button(comparison, 'change').addEventListener('click', () => toggleRunFields(comparison));
+    shadow.querySelector('.tf2c-speed').addEventListener('change', event => {
+      void changePlaybackSpeed(comparison, Number(event.target.value));
+    });
     layout.addEventListener('change', () => {
       try { localStorage.setItem('tf2-dual-demo-layout', layout.value); } catch { /* Layout still applies this session. */ }
       applyLayout(comparison);
