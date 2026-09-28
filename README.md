@@ -13,6 +13,7 @@ A small Chrome and Edge extension for watching [Tempus](https://tempus2.xyz/) TF
 - Match one viewer to the other if their times drift apart.
 - Jump both runs to a specific time such as `12.5` or `1:12.5`.
 - Choose side by side, ultrawide, stacked, or fill layouts.
+- Start each replay with its view-options panel collapsed while keeping the gear button available.
 - Use `Space` for play/pause and `←` / `→` to seek both demos.
 
 ## Install

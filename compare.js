@@ -78,6 +78,29 @@
     return { doc, toolbar, tick, elapsed, playing };
   }
 
+  function collapseViewOptions(frame) {
+    let doc;
+    try { doc = frame.contentDocument; } catch { return false; }
+    if (!doc?.documentElement || doc.__tf2ViewOptionsCollapseStarted) return false;
+    doc.__tf2ViewOptionsCollapseStarted = true;
+
+    const closeWhenPresent = () => {
+      const toggle = doc.querySelector('button[aria-controls="view-options-panel"]');
+      if (!toggle) return false;
+      if (toggle.getAttribute('aria-expanded') === 'true') toggle.click();
+      return true;
+    };
+    if (closeWhenPresent()) return true;
+
+    const Observer = doc.defaultView?.MutationObserver || MutationObserver;
+    const observer = new Observer(() => {
+      if (closeWhenPresent()) observer.disconnect();
+    });
+    observer.observe(doc.documentElement, { childList: true, subtree: true });
+    setTimeout(() => observer.disconnect(), 10000);
+    return false;
+  }
+
   function waitForViewer(frame, label) {
     return new Promise((resolve, reject) => {
       const started = Date.now();
@@ -90,6 +113,7 @@
         const current = viewer(frame);
         if (current) {
           clearInterval(timer);
+          collapseViewOptions(frame);
           resolve(current);
         } else if (Date.now() - started > LOAD_TIMEOUT_MS) {
           clearInterval(timer);
@@ -107,6 +131,7 @@
       }, LOAD_TIMEOUT_MS);
       function onLoad() {
         clearTimeout(timeout);
+        collapseViewOptions(frame);
         waitForViewer(frame, label).then(resolve, reject);
       }
       frame.addEventListener('load', onLoad, { once: true });
